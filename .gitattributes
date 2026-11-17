@@ -1,0 +1,3 @@
+# Shell scripts run on Linux (Azure App Service runs startup.sh with bash): keep LF line endings,
+# even on Windows with core.autocrlf=true, or bash fails with "$'\r': command not found".
+*.sh text eol=lf
