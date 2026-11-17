@@ -200,6 +200,7 @@ def seed(db: Session) -> None:
         db.add(m.LevelCell(**c))
     for i, q in enumerate(DATA["questions"]):
         db.add(m.Question(position=i, **q))
+    db.flush()  # questions must exist before QuestionResult rows reference them
 
     markets = {}
     for mk in DATA["markets"]:
@@ -239,7 +240,9 @@ def seed(db: Session) -> None:
                 db.add(a)
                 db.flush()
                 if is_real:
-                    results, flags, evidence = DATA["bestbuy_us_2026_10"], DATA["validation_flags"], DATA["evidence_bestbuy"]
+                    # Results keyed to retired question IDs are skipped; the dry-run data step loads the current set.
+                    results = [r for r in DATA["bestbuy_us_2026_10"] if r["qid"] in qmap]
+                    flags, evidence = DATA["validation_flags"], DATA["evidence_bestbuy"]
                 else:
                     results = _illustrative_results(rt, code, month, DATA["questions"], real)
                     flags = _illustrative_flags(results, qmap)
@@ -302,7 +305,7 @@ def _notes(is_real: bool) -> list[str]:
     ]
 
 
-DEFAULT_SKUS = [("surface", "Surface devices"), ("copilot-pc", "Copilot+ PCs"), ("windows-11", "Windows 11 PCs"), ("m365", "Microsoft 365")]
+DEFAULT_SKUS = [("surface-devices", "Surface devices"), ("copilot-pc", "Copilot+ PCs"), ("windows-11", "Windows 11 PCs"), ("m365", "Microsoft 365")]
 
 
 def ensure_skus(db) -> None:
@@ -310,6 +313,12 @@ def ensure_skus(db) -> None:
     if db.scalar(select(m.Sku.id).limit(1)) is None:
         for i, (code, name) in enumerate(DEFAULT_SKUS):
             db.add(m.Sku(code=code, name=name, position=i))
+        db.commit()
+        return
+    # Rename the old "surface" code to "surface-devices" in databases seeded before the change
+    old = db.scalar(select(m.Sku).where(m.Sku.code == "surface"))
+    if old and db.scalar(select(m.Sku.id).where(m.Sku.code == "surface-devices")) is None:
+        old.code = "surface-devices"
         db.commit()
 
 
